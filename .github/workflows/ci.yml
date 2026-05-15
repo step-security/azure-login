@@ -1,0 +1,35 @@
+name: Build and Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  build_test_job:
+    name: 'Build and test job'
+    runs-on: ${{ matrix.os }}
+    strategy:
+        matrix:
+          os: ${{ github.actor == 'dependabot[bot]' && fromJson('["ubuntu-latest"]') || fromJson('["windows-latest", "ubuntu-latest"]') }}
+    steps:
+
+    - name: 'Checking out repo code'
+      uses: actions/checkout@v6
+
+    - name: Set Node.js 24.x for GitHub Action
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24.x
+
+    - name: 'Validate build'
+      run: |
+        npm install
+        npm run build
+
+    - name: 'Run L0 tests'
+      run: |
+        npm run test
