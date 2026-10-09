@@ -3435,6 +3435,29 @@ function copyFile(srcFile, destFile, force) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -3445,9 +3468,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+const path = __importStar(__nccwpck_require__(17));
 const LoginConfig_1 = __nccwpck_require__(765);
 const Utils_1 = __nccwpck_require__(127);
 class AzPSScriptBuilder {
+    static getScriptPath() {
+        return path.join(__dirname, 'AzPSLogin.ps1');
+    }
     static getImportLatestModuleScript(moduleName) {
         let script = `try {
             $ErrorActionPreference = "Stop"
@@ -3465,91 +3492,55 @@ class AzPSScriptBuilder {
         return ConvertTo-Json $output`;
         return script;
     }
-    static getAzPSLoginScript(loginConfig) {
+    static getAzPSLoginInvocation(loginConfig) {
         return __awaiter(this, void 0, void 0, function* () {
-            let loginMethodName = "";
-            let commands = "";
-            if (loginConfig.environment.toLowerCase() == "azurestack") {
-                commands += `Add-AzEnvironment -Name '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.environment)}' -ARMEndpoint '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.resourceManagerEndpointUrl)}' | out-null;`;
+            const args = [
+                '-File', AzPSScriptBuilder.getScriptPath(),
+                '-Environment', loginConfig.environment,
+                '-AuthType', loginConfig.authType,
+            ];
+            const env = {};
+            let methodName;
+            if (loginConfig.tenantId) {
+                args.push('-Tenant', loginConfig.tenantId);
+            }
+            if (loginConfig.subscriptionId) {
+                args.push('-Subscription', loginConfig.subscriptionId);
+            }
+            if (loginConfig.environment.toLowerCase() === 'azurestack') {
+                args.push('-ArmEndpoint', loginConfig.resourceManagerEndpointUrl);
+            }
+            if (loginConfig.maxContextPopulation) {
+                args.push('-MaxContextPopulation', loginConfig.maxContextPopulation);
             }
             if (loginConfig.authType === LoginConfig_1.LoginConfig.AUTH_TYPE_SERVICE_PRINCIPAL) {
+                args.push('-ApplicationId', loginConfig.servicePrincipalId);
                 if (loginConfig.servicePrincipalSecret) {
-                    commands += AzPSScriptBuilder.loginWithSecret(loginConfig);
-                    loginMethodName = 'service principal with secret';
+                    env[AzPSScriptBuilder.ENV_SP_SECRET] = loginConfig.servicePrincipalSecret;
+                    methodName = 'service principal with secret';
                 }
                 else {
-                    commands += yield AzPSScriptBuilder.loginWithOIDC(loginConfig);
-                    loginMethodName = "OIDC";
+                    yield loginConfig.getFederatedToken();
+                    env[AzPSScriptBuilder.ENV_FEDERATED_TOKEN] = loginConfig.federatedToken;
+                    methodName = 'OIDC';
                 }
             }
             else {
                 if (loginConfig.servicePrincipalId) {
-                    commands += AzPSScriptBuilder.loginWithUserAssignedIdentity(loginConfig);
-                    loginMethodName = 'user-assigned managed identity';
+                    args.push('-ApplicationId', loginConfig.servicePrincipalId);
+                    methodName = 'user-assigned managed identity';
                 }
                 else {
-                    commands += AzPSScriptBuilder.loginWithSystemAssignedIdentity(loginConfig);
-                    loginMethodName = 'system-assigned managed identity';
+                    methodName = 'system-assigned managed identity';
                 }
             }
-            let script = `try {
-            $ErrorActionPreference = "Stop"
-            $WarningPreference = "SilentlyContinue"
-            $output = @{}
-            ${commands}
-            $output['Success'] = $true
-            $output['Result'] = ""
-        }
-        catch {
-            $output['Success'] = $false
-            $output['Error'] = $_.exception.Message
-        }
-        return ConvertTo-Json $output`;
-            return [loginMethodName, script];
+            return { methodName, args, env };
         });
-    }
-    static loginWithSecret(loginConfig) {
-        let loginCmdlet = `$psLoginSecrets = ConvertTo-SecureString '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.servicePrincipalSecret)}' -AsPlainText -Force; `;
-        loginCmdlet += `$psLoginCredential = New-Object System.Management.Automation.PSCredential('${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.servicePrincipalId)}', $psLoginSecrets); `;
-        let cmdletSuffix = "-Credential $psLoginCredential";
-        loginCmdlet += AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-        return loginCmdlet;
-    }
-    static loginWithOIDC(loginConfig) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield loginConfig.getFederatedToken();
-            let cmdletSuffix = `-ApplicationId '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.servicePrincipalId)}' -FederatedToken '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.federatedToken)}'`;
-            return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-        });
-    }
-    static loginWithSystemAssignedIdentity(loginConfig) {
-        let cmdletSuffix = "";
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-    static loginWithUserAssignedIdentity(loginConfig) {
-        let cmdletSuffix = `-AccountId '${(0, Utils_1.psEscapeSingleQuoted)(loginConfig.servicePrincipalId)}'`;
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-    static psLoginCmdlet(authType, environment, tenantId, subscriptionId, cmdletSuffix) {
-        let loginCmdlet = `Connect-AzAccount `;
-        if (authType === LoginConfig_1.LoginConfig.AUTH_TYPE_SERVICE_PRINCIPAL) {
-            loginCmdlet += "-ServicePrincipal ";
-        }
-        else {
-            loginCmdlet += "-Identity ";
-        }
-        loginCmdlet += `-Environment '${(0, Utils_1.psEscapeSingleQuoted)(environment)}' `;
-        if (tenantId) {
-            loginCmdlet += `-Tenant '${(0, Utils_1.psEscapeSingleQuoted)(tenantId)}' `;
-        }
-        if (subscriptionId) {
-            loginCmdlet += `-Subscription '${(0, Utils_1.psEscapeSingleQuoted)(subscriptionId)}' `;
-        }
-        loginCmdlet += `${cmdletSuffix} -InformationAction Ignore | out-null;`;
-        return loginCmdlet;
     }
 }
 exports["default"] = AzPSScriptBuilder;
+AzPSScriptBuilder.ENV_SP_SECRET = 'AZURE_LOGIN_ACTION__SP_SECRET';
+AzPSScriptBuilder.ENV_FEDERATED_TOKEN = 'AZURE_LOGIN_ACTION__FEDERATED_TOKEN';
 
 
 /***/ }),
@@ -3645,6 +3636,16 @@ class AzPSUtils {
     }
     static runPSScript(psScript) {
         return __awaiter(this, void 0, void 0, function* () {
+            return AzPSUtils.runPwsh(['-Command', psScript]);
+        });
+    }
+    static runPSFile(args, extraEnv = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return AzPSUtils.runPwsh(args, extraEnv);
+        });
+    }
+    static runPwsh(args, extraEnv = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
             let outputString = "";
             let commandStdErr = false;
             const options = {
@@ -3662,8 +3663,11 @@ class AzPSUtils {
                     }
                 }
             };
+            if (Object.keys(extraEnv).length > 0) {
+                options.env = Object.assign(Object.assign({}, process.env), extraEnv);
+            }
             let psPath = yield io.which(AzPSConstants.PowerShell_CmdName, true);
-            yield exec.exec(`"${psPath}"`, ["-Command", psScript], options);
+            yield exec.exec(`"${psPath}"`, args, options);
             if (commandStdErr) {
                 throw new Error('Azure PowerShell login failed with errors.');
             }
@@ -3795,7 +3799,11 @@ class LoginConfig {
             this.readParametersFromCreds();
             this.audience = core.getInput('audience', { required: false });
             this.federatedToken = null;
-            this.mask(this.servicePrincipalId);
+            this.maxContextPopulation = core.getInput('max-context-population', { required: false }).trim();
+            this.maskClientId = core.getInput('mask-client-id').toLowerCase() !== "false";
+            if (this.maskClientId) {
+                this.mask(this.servicePrincipalId);
+            }
             this.mask(this.servicePrincipalSecret);
         });
     }
@@ -3855,6 +3863,19 @@ class LoginConfig {
         }
         if (!this.subscriptionId && !this.allowNoSubscriptionsLogin) {
             throw new Error("Ensure 'subscription-id' is supplied or 'allow-no-subscriptions' is 'true'.");
+        }
+        if (this.maxContextPopulation) {
+            // Validate the raw string (not Number(), which accepts 1e3/0x10/5.0
+            // and out-of-range values that PowerShell's [int] then rejects).
+            const INT32_MAX = 2147483647;
+            const isValid = this.maxContextPopulation === '-1'
+                || (/^[1-9][0-9]*$/.test(this.maxContextPopulation) && Number(this.maxContextPopulation) <= INT32_MAX);
+            if (!isValid) {
+                throw new Error(`Invalid value '${this.maxContextPopulation}' for 'max-context-population'. It must be -1 (load all subscription contexts) or a positive integer between 1 and ${INT32_MAX}.`);
+            }
+            if (!this.enableAzPSSession) {
+                core.warning("'max-context-population' is only applied when 'enable-AzPSSession' is 'true'. It has no effect on Azure CLI login and will be ignored.");
+            }
         }
     }
     mask(parameterValue) {
@@ -3960,8 +3981,9 @@ exports.psEscapeSingleQuoted = psEscapeSingleQuoted;
 function setUserAgent() {
     let usrAgentRepo = crypto.createHash('sha256').update(`${process.env.GITHUB_REPOSITORY}`).digest('hex');
     let actionName = 'AzureLogin';
-    process.env.AZURE_HTTP_USER_AGENT = (!!process.env.AZURE_HTTP_USER_AGENT ? `${process.env.AZURE_HTTP_USER_AGENT} ` : '') + `GITHUBACTIONS/${actionName}@v2_${usrAgentRepo}_${process.env.RUNNER_ENVIRONMENT}_${process.env.GITHUB_RUN_ID}`;
-    process.env.AZUREPS_HOST_ENVIRONMENT = (!!process.env.AZUREPS_HOST_ENVIRONMENT ? `${process.env.AZUREPS_HOST_ENVIRONMENT} ` : '') + `GITHUBACTIONS/${actionName}@v2_${usrAgentRepo}_${process.env.RUNNER_ENVIRONMENT}_${process.env.GITHUB_RUN_ID}`;
+    let actionRef = process.env.GITHUB_ACTION_REF || 'unknown';
+    process.env.AZURE_HTTP_USER_AGENT = (!!process.env.AZURE_HTTP_USER_AGENT ? `${process.env.AZURE_HTTP_USER_AGENT} ` : '') + `GITHUBACTIONS/${actionName}@${actionRef}_${usrAgentRepo}_${process.env.RUNNER_ENVIRONMENT}_${process.env.GITHUB_RUN_ID}`;
+    process.env.AZUREPS_HOST_ENVIRONMENT = (!!process.env.AZUREPS_HOST_ENVIRONMENT ? `${process.env.AZUREPS_HOST_ENVIRONMENT} ` : '') + `GITHUBACTIONS/${actionName}@${actionRef}_${usrAgentRepo}_${process.env.RUNNER_ENVIRONMENT}_${process.env.GITHUB_RUN_ID}`;
 }
 exports.setUserAgent = setUserAgent;
 function cleanupAzCLIAccounts() {
