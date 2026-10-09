@@ -1,0 +1,17 @@
+{
+  "$comment": "Managed automatically when syncing with upstream. Do not edit by hand.",
+  "schema_version": 1,
+  "onboarding_type": "copied",
+  "action_type": "node",
+  "upstream": {
+    "repository": "Azure/login",
+    "synced_tag": "v3.1.0",
+    "synced_commit": "a641126d1b8aa4d1fa005f4f92df94a3a4c4c906",
+    "archived": false
+  },
+  "build": {
+    "package_manager": "npm@11.19.0",
+    "node_version": "24",
+    "script": "build"
+  }
+}

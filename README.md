@@ -3,8 +3,17 @@
 # Azure Login Action
 
 - [Azure Login Action](#azure-login-action)
+  - [Supported Versions](#supported-versions)
+  - [Version Selection](#version-selection)
+    - [Major-version tag](#major-version-tag)
+    - [Exact version tag](#exact-version-tag)
+    - [Branch reference](#branch-reference)
+    - [Commit SHA](#commit-sha)
+  - [Security Updates](#security-updates)
+  - [Release integrity](#release-integrity)
   - [Input Parameters](#input-parameters)
     - [`client-id`](#client-id)
+    - [`mask-client-id`](#mask-client-id)
     - [`subscription-id`](#subscription-id)
     - [`tenant-id`](#tenant-id)
     - [`creds`](#creds)
@@ -13,6 +22,7 @@
     - [`allow-no-subscriptions`](#allow-no-subscriptions)
     - [`audience`](#audience)
     - [`auth-type`](#auth-type)
+    - [`max-context-population`](#max-context-population)
   - [Workflow Examples](#workflow-examples)
     - [Login With OpenID Connect (OIDC) \[Recommended\]](#login-with-openid-connect-oidc-recommended)
     - [Login With a Service Principal Secret](#login-with-a-service-principal-secret)
@@ -22,6 +32,8 @@
     - [Login to Azure Stack Hub](#login-to-azure-stack-hub)
     - [Login without subscription](#login-without-subscription)
     - [Enable/Disable the cleanup steps](#enabledisable-the-cleanup-steps)
+  - [Troubleshooting](#troubleshooting)
+    - [OIDC login fails with `AADSTS700213` / `AADSTS7002138` (no matching federated identity record)](#oidc-login-fails-with-aadsts700213--aadsts7002138-no-matching-federated-identity-record)
   - [Security hardening](#security-hardening)
   - [Reference](#reference)
     - [GitHub Action](#github-action)
@@ -48,6 +60,91 @@ Azure Login Action supports different ways of authentication with Azure.
 > [!WARNING]
 > Avoid using managed identity login on self-hosted runners in public repositories. Managed identities enable secure authentication with Azure resources and obtain Microsoft Entra ID tokens without the need for explicit credential management. Any user can open pull requests against your repository and access your self-hosted runners without credentials. See more details in [self-hosted runner security](https://docs.github.com/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security).
 
+** **
+
+> [!WARNING]
+> Only pass values from `${{ secrets.* }}` into `client-id`, `tenant-id`, `subscription-id`, and `creds`. Do not pipe values from `${{ github.event.* }}` (pull request titles, issue comments, `workflow_dispatch` inputs, branch names, etc.) into these inputs. Untrusted values in these fields can allow attackers to influence the Azure identity the action logs in as.
+
+** **
+
+> [!WARNING]
+> Only set `enable-AzPSSession: true` if your workflow runs Azure PowerShell (`Az.*`) cmdlets. If your workflow only uses the Azure CLI (`az ...`), leave `enable-AzPSSession` unset (the default is `false`). Enabling it launches an additional PowerShell login step that is unnecessary for CLI-only workflows.
+
+## Supported Versions
+
+Azure Login follows a major-version support model.
+
+| Version | Status |
+| --- | --- |
+| v3 | Supported |
+| v2 | Maintenance mode (security fixes only) |
+| v1 | End of Life (EOL) |
+
+New features are released only to supported versions. Security fixes are released to supported versions and versions in maintenance mode.
+
+Customers are strongly encouraged to use the latest v3 release.
+
+## Version Selection
+
+GitHub Actions users can reference Azure Login using several forms.
+
+### Major-version tag
+
+```yaml
+uses: step-security/azure-login@v3
+```
+
+Receives compatible updates, including security fixes, released to the referenced major version.
+
+### Exact version tag
+
+```yaml
+uses: step-security/azure-login@v3
+```
+
+Remains pinned to that specific release and does not automatically receive future fixes or updates.
+
+### Branch reference
+
+> [!WARNING]
+> Branch references such as `uses: step-security/azure-login@v3` are **not** supported for consumption. The action's compiled output (`lib/`) is not committed to `master`; it is built and published only to release tags and `releases/*` branches, so referencing a branch will fail to run. Use a major-version tag, an exact version tag, or a full-length commit SHA instead.
+
+### Commit SHA
+
+```yaml
+uses: azure/login@<full-length-commit-sha>
+```
+
+Remains pinned to that commit and does not automatically receive future fixes or updates.
+
+## Security Updates
+
+Security fixes are released to supported versions and versions in maintenance mode. Customers using exact version tags or commit SHA references must explicitly upgrade to a patched release to receive security fixes.
+
+```yaml
+# Automatically receives future v3 security updates
+uses: step-security/azure-login@v3
+
+# Does not automatically receive future updates
+uses: step-security/azure-login@v3
+```
+
+Customers using v1 should migrate to v3. End-of-life releases no longer receive updates or security fixes.
+
+## Release integrity
+
+Azure Login publishes **immutable releases**. Once a release is published, its tag-to-commit binding and built artifacts are frozen and cannot be changed after the fact.
+
+- **Exact version tags are frozen.** A version tag such as `v3.0.2` always points at the same commit and the same compiled output. It is never moved, retargeted, or deleted.
+- **Built artifacts live on release refs, not `master`.** The compiled action (`lib/`) is committed to each release's `releases/*` branch and version tag. `master` holds source only and is not runnable as an action (see [Branch reference](#branch-reference)).
+- **The major-version tag floats forward.** `v3` is the one deliberately movable pointer: each new v3 release advances `v3` to the latest v3 patch, so `uses: step-security/azure-login@v3` receives compatible updates. `v3` only ever advances to a published, immutable release commit.
+
+Because published releases are immutable, referencing an exact version tag or a full-length commit SHA gives a reproducible, tamper-evident dependency. Pinning to a full-length commit SHA is recommended for supply-chain hardening:
+
+```yaml
+uses: azure/login@<full-length-commit-sha> # v3.0.2
+```
+
 ## Input Parameters
 
 |Parameter Name|Required?|Type|Default Value|Description|
@@ -61,6 +158,8 @@ Azure Login Action supports different ways of authentication with Azure.
 |allow-no-subscriptions|false|boolean|false|if login without subscription is allowed|
 |audience|false|string|api://AzureADTokenExchange|the audience to get the JWT ID token from GitHub OIDC provider|
 |auth-type|false|string|SERVICE_PRINCIPAL|the auth type|
+|max-context-population|false|integer||only used when `enable-AzPSSession` is `true`; overrides the Azure PowerShell `MaxContextPopulation`. Defaults to the Azure PowerShell default of 25 when unset.|
+|mask-client-id|false|boolean|true|if the `client-id` value is masked in workflow logs|
 
 ### `client-id`
 
@@ -71,6 +170,32 @@ It's used in login with OpenID Connect (OIDC) and user-assigned managed identity
 It's better to create a GitHub Action secret for this parameter when using it. Refer to [Using secrets in GitHub Actions](https://docs.github.com/actions/security-guides/using-secrets-in-github-actions).
 
 Refer to [Login With OpenID Connect (OIDC)](#login-with-openid-connect-oidc-recommended) and [Login With User-assigned Managed Identity](#login-with-user-assigned-managed-identity) for its usage.
+
+> [!NOTE]
+> By default the action registers the `client-id` value as a secret (via `core.setSecret`) so it is masked in workflow logs. Some enterprises treat the client ID as sensitive, and masking also prevents it from being printed accidentally, which matters in public repositories. `tenant-id` and `subscription-id` are not masked. Set [`mask-client-id`](#mask-client-id) to `false` to opt out of the masking.
+
+### `mask-client-id`
+
+_Available in `step-security/azure-login@v3`._
+
+The input parameter `mask-client-id` controls whether the login client id is registered as a secret and masked in the workflow logs. It defaults to `true`.
+
+Set it to `false` when the client id is not treated as sensitive and masking gets in the way, for example when the same value appears in log output or command results that you need to read.
+
+The client-id is effectively a username: it is low sensitivity on its own, and only useful to an attacker who already holds the client secret or certificate. Disabling masking is therefore reasonable when the value is treated as configuration rather than as a secret.
+
+```yaml
+  - name: Azure login
+    uses: step-security/azure-login@v3
+    with:
+      tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      client-id: ${{ vars.AZURE_CLIENT_ID }}
+      mask-client-id: false
+```
+
+> [!NOTE]
+> The value is only unmasked when it is not a GitHub Action secret. A value passed from `${{ secrets.* }}` is still masked by GitHub itself, regardless of this input.
 
 ### `subscription-id`
 
@@ -146,6 +271,28 @@ Azure Login Action gets the JWT ID token from GitHub OIDC provider when login wi
 The input parameter `auth-type` specifies the type of authentication. The default value is `SERVICE_PRINCIPAL`. Users can specify it as `IDENTITY` for login with Managed Identity.
 
 Refer to [Login With System-assigned Managed Identity](#login-with-system-assigned-managed-identity) and [Login With User-assigned Managed Identity](#login-with-user-assigned-managed-identity) for its usage.
+
+### `max-context-population`
+
+_Available in `step-security/azure-login@v3`._
+
+The input parameter `max-context-population` is only used when [`enable-AzPSSession`](#enable-azpssession) is `true`. It overrides the Azure PowerShell `MaxContextPopulation` value that `Connect-AzAccount` uses, which controls how many subscription contexts are loaded into the session.
+
+Azure PowerShell loads a maximum of 25 subscription contexts by default. When the identity has access to more than 25 subscriptions, only a subset is loaded, so commands that enumerate or target subscriptions outside that subset may behave inconsistently. Set `max-context-population` to `-1` to load all subscriptions, or to a positive integer (1 to 2147483647) to load a specific number. When it is unset, the Azure PowerShell default of 25 applies and behavior is unchanged.
+
+```yaml
+  - name: Azure login
+    uses: step-security/azure-login@v3
+    with:
+      client-id: ${{ vars.AZURE_CLIENT_ID }}
+      tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      enable-AzPSSession: true
+      max-context-population: -1
+```
+
+> [!NOTE]
+> Loading all subscription contexts with `-1` makes `Connect-AzAccount` slower when the identity can access a large number of subscriptions, because every subscription is enumerated during login. Set it only when your workflow needs contexts beyond the default 25.
 
 ## Workflow Examples
 
@@ -494,6 +641,9 @@ jobs:
 
 ### Login to Azure Stack Hub
 
+> [!NOTE]
+> Azure CLI versions newer than 2.66.x no longer support Azure Stack Hub. To use `environment: 'AzureStack'`, pin Azure CLI to 2.66.x (LTS), for example via the [Azure CLI action](https://github.com/Azure/cli) with `azcliversion: 2.66.0`. See the [Azure CLI notice for Azure Stack Hub customers](https://learn.microsoft.com/cli/azure/whats-new-overview?view=azure-cli-latest#important-notice-for-azure-stack-hub-customers).
+
 ```yaml
 # File: .github/workflows/workflow.yml
 
@@ -666,6 +816,29 @@ jobs:
 
 ```
 
+## Troubleshooting
+
+### OIDC login fails with `AADSTS700213` / `AADSTS7002138` (no matching federated identity record)
+
+When logging in with OIDC, the login may fail with an error similar to:
+
+```text
+Error: AADSTS700213: No matching federated identity record found for presented assertion subject 'repo:<org>/<repo>:environment:production'.
+```
+
+or:
+
+```text
+Error: AADSTS7002138: No matching federated identity record found for presented assertion subject 'repo:<org>/<repo>:ref:refs/heads/main'. The subject matches with case-insensitive comparison, but not with case-sensitive comparison.
+```
+
+This means Microsoft Entra ID could not find a federated identity credential whose **Subject** exactly matches the subject in the OIDC token that GitHub presented. The token's subject is shown in the run log under `Federated token details` as `subject claim`. Two common causes:
+
+- **Case mismatch.** Federated credential subjects are matched **case-sensitively**. If your organization, repository, branch, or environment name uses uppercase characters (for example `repo:My-Org/My-Repo`), the federated credential Subject must use the exact same casing as the `subject claim` in the run log.
+- **Subject includes GitHub numeric IDs.** When you create the federated credential in the Azure portal and fill in the optional GitHub owner/repository ID fields, the portal generates a Subject of the form `repo:<org>@<org-id>/<repo>@<repo-id>:<entity>:<value>`. The OIDC token GitHub sends does **not** include those numeric IDs (its subject is `repo:<org>/<repo>:<entity>:<value>`), so it will never match. Create or edit the federated credential **without** the owner/repository IDs so the Subject matches the token exactly.
+
+In both cases, set the federated credential Subject to exactly match the `subject claim` shown in your run's `Federated token details`. See [Configure a federated identity credential](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions) for details.
+
 ## Security hardening
 
 > [!WARNING]
@@ -687,4 +860,18 @@ Refer to the [Azure CLI](https://github.com/azure/cli) GitHub Action to run your
 
 ### Azure PowerShell Action
 
-Refer to the [Azure PowerShell](https://github.com/step-security/powershell) GitHub Action to run your Azure PowerShell scripts.
+Refer to the [Azure PowerShell](https://github.com/azure/powershell) GitHub Action to run your Azure PowerShell scripts.
+
+## Contributing
+
+This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
+the rights to use your contribution. For details, visit <https://cla.opensource.microsoft.com>.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide
+a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
+provided by the bot. You will only need to do this once across all repos using our CLA.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
