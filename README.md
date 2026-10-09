@@ -3,14 +3,6 @@
 # Azure Login Action
 
 - [Azure Login Action](#azure-login-action)
-  - [Supported Versions](#supported-versions)
-  - [Version Selection](#version-selection)
-    - [Major-version tag](#major-version-tag)
-    - [Exact version tag](#exact-version-tag)
-    - [Branch reference](#branch-reference)
-    - [Commit SHA](#commit-sha)
-  - [Security Updates](#security-updates)
-  - [Release integrity](#release-integrity)
   - [Input Parameters](#input-parameters)
     - [`client-id`](#client-id)
     - [`mask-client-id`](#mask-client-id)
@@ -69,81 +61,6 @@ Azure Login Action supports different ways of authentication with Azure.
 
 > [!WARNING]
 > Only set `enable-AzPSSession: true` if your workflow runs Azure PowerShell (`Az.*`) cmdlets. If your workflow only uses the Azure CLI (`az ...`), leave `enable-AzPSSession` unset (the default is `false`). Enabling it launches an additional PowerShell login step that is unnecessary for CLI-only workflows.
-
-## Supported Versions
-
-Azure Login follows a major-version support model.
-
-| Version | Status |
-| --- | --- |
-| v3 | Supported |
-| v2 | Maintenance mode (security fixes only) |
-| v1 | End of Life (EOL) |
-
-New features are released only to supported versions. Security fixes are released to supported versions and versions in maintenance mode.
-
-Customers are strongly encouraged to use the latest v3 release.
-
-## Version Selection
-
-GitHub Actions users can reference Azure Login using several forms.
-
-### Major-version tag
-
-```yaml
-uses: step-security/azure-login@v3
-```
-
-Receives compatible updates, including security fixes, released to the referenced major version.
-
-### Exact version tag
-
-```yaml
-uses: step-security/azure-login@v3
-```
-
-Remains pinned to that specific release and does not automatically receive future fixes or updates.
-
-### Branch reference
-
-> [!WARNING]
-> Branch references such as `uses: step-security/azure-login@v3` are **not** supported for consumption. The action's compiled output (`lib/`) is not committed to `master`; it is built and published only to release tags and `releases/*` branches, so referencing a branch will fail to run. Use a major-version tag, an exact version tag, or a full-length commit SHA instead.
-
-### Commit SHA
-
-```yaml
-uses: azure/login@<full-length-commit-sha>
-```
-
-Remains pinned to that commit and does not automatically receive future fixes or updates.
-
-## Security Updates
-
-Security fixes are released to supported versions and versions in maintenance mode. Customers using exact version tags or commit SHA references must explicitly upgrade to a patched release to receive security fixes.
-
-```yaml
-# Automatically receives future v3 security updates
-uses: step-security/azure-login@v3
-
-# Does not automatically receive future updates
-uses: step-security/azure-login@v3
-```
-
-Customers using v1 should migrate to v3. End-of-life releases no longer receive updates or security fixes.
-
-## Release integrity
-
-Azure Login publishes **immutable releases**. Once a release is published, its tag-to-commit binding and built artifacts are frozen and cannot be changed after the fact.
-
-- **Exact version tags are frozen.** A version tag such as `v3.0.2` always points at the same commit and the same compiled output. It is never moved, retargeted, or deleted.
-- **Built artifacts live on release refs, not `master`.** The compiled action (`lib/`) is committed to each release's `releases/*` branch and version tag. `master` holds source only and is not runnable as an action (see [Branch reference](#branch-reference)).
-- **The major-version tag floats forward.** `v3` is the one deliberately movable pointer: each new v3 release advances `v3` to the latest v3 patch, so `uses: step-security/azure-login@v3` receives compatible updates. `v3` only ever advances to a published, immutable release commit.
-
-Because published releases are immutable, referencing an exact version tag or a full-length commit SHA gives a reproducible, tamper-evident dependency. Pinning to a full-length commit SHA is recommended for supply-chain hardening:
-
-```yaml
-uses: azure/login@<full-length-commit-sha> # v3.0.2
-```
 
 ## Input Parameters
 
@@ -347,7 +264,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Azure CLI script
-        uses: azure/cli@v2
+        uses: step-security/azure-cli-action@v3
         with:
           azcliversion: latest
           inlineScript: |
@@ -378,7 +295,7 @@ jobs:
           enable-AzPSSession: true
 
       - name: Azure CLI script
-        uses: azure/cli@v2
+        uses: step-security/azure-cli-action@v3
         with:
           azcliversion: latest
           inlineScript: |
@@ -437,7 +354,7 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Azure CLI script
-      uses: azure/cli@v2
+      uses: step-security/azure-cli-action@v2
       with:
         azcliversion: latest
         inlineScript: |
@@ -465,7 +382,7 @@ jobs:
         enable-AzPSSession: true
 
     - name: Azure CLI script
-      uses: azure/cli@v2
+      uses: step-security/azure-cli-action@v3
       with:
         azcliversion: latest
         inlineScript: |
@@ -536,7 +453,7 @@ jobs:
       # Azure CLI Action only supports linux self-hosted runners for now.
       # If you want to execute the Azure CLI script on a windows self-hosted runner, you can execute it directly in `run`.
       - name: Azure CLI script
-        uses: azure/cli@v2
+        uses: step-security/azure-cli-action@v3
         with:
           azcliversion: latest
           inlineScript: |
@@ -603,7 +520,7 @@ jobs:
       # Azure CLI Action only supports linux self-hosted runners for now.
       # If you want to execute the Azure CLI script on a windows self-hosted runner, you can execute it directly in `run`.
       - name: Azure CLI script
-        uses: azure/cli@v2
+        uses: step-security/azure-cli-action@v3
         with:
           azcliversion: latest
           inlineScript: |
@@ -642,7 +559,7 @@ jobs:
 ### Login to Azure Stack Hub
 
 > [!NOTE]
-> Azure CLI versions newer than 2.66.x no longer support Azure Stack Hub. To use `environment: 'AzureStack'`, pin Azure CLI to 2.66.x (LTS), for example via the [Azure CLI action](https://github.com/Azure/cli) with `azcliversion: 2.66.0`. See the [Azure CLI notice for Azure Stack Hub customers](https://learn.microsoft.com/cli/azure/whats-new-overview?view=azure-cli-latest#important-notice-for-azure-stack-hub-customers).
+> Azure CLI versions newer than 2.66.x no longer support Azure Stack Hub. To use `environment: 'AzureStack'`, pin Azure CLI to 2.66.x (LTS), for example via the [Azure CLI action](https://github.com/step-security/azure-cli-action) with `azcliversion: 2.66.0`. See the [Azure CLI notice for Azure Stack Hub customers](https://learn.microsoft.com/cli/azure/whats-new-overview?view=azure-cli-latest#important-notice-for-azure-stack-hub-customers).
 
 ```yaml
 # File: .github/workflows/workflow.yml
@@ -692,7 +609,7 @@ jobs:
         enable-AzPSSession: true
 
     - name: Azure CLI script
-      uses: azure/cli@v2
+      uses: step-security/azure-cli-action@v3
       with:
         azcliversion: latest
         inlineScript: |
@@ -856,22 +773,8 @@ With [GitHub Actions for Azure](https://github.com/Azure/actions/), you can crea
 
 ### Azure CLI Action
 
-Refer to the [Azure CLI](https://github.com/azure/cli) GitHub Action to run your Azure CLI scripts.
+Refer to the [Azure CLI](https://github.com/step-security/azure-cli-action) GitHub Action to run your Azure CLI scripts.
 
 ### Azure PowerShell Action
 
-Refer to the [Azure PowerShell](https://github.com/azure/powershell) GitHub Action to run your Azure PowerShell scripts.
-
-## Contributing
-
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit <https://cla.opensource.microsoft.com>.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+Refer to the [Azure PowerShell](https://github.com/step-security/powershell) GitHub Action to run your Azure PowerShell scripts.

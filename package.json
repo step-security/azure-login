@@ -1,15 +1,10 @@
 {
-  "name": "login",
+  "name": "azure-login",
   "description": "Login Azure wraps the az login, allowing for Azure actions to log into Azure",
   "main": "dist/main/index.js",
   "scripts": {
-<<<<<<< 6f46613db7f1f0858ca1a70d54678e31eaa298d9
-    "build:main": "ncc build src/main.ts -o dist/main",
+    "build:main": "ncc build src/main.ts -o dist/main && node scripts/copy-ps-assets.js",
     "build:cleanup": "ncc build src/cleanup.ts -o dist/cleanup",
-=======
-    "build:main": "ncc build src/main.ts -o lib/main && node scripts/copy-ps-assets.js",
-    "build:cleanup": "ncc build src/cleanup.ts -o lib/cleanup",
->>>>>>> a7d70f4fc3e18369ddd4e955e032ae3637ebc0cd
     "build": "npm run build:main && npm run build:cleanup",
     "test": "jest"
   },
@@ -27,11 +22,7 @@
   "dependencies": {
     "@actions/core": "1.11.1",
     "@actions/exec": "^1.0.1",
-<<<<<<< 6f46613db7f1f0858ca1a70d54678e31eaa298d9
     "@actions/io": "^1.0.1",
-    "axios": "1.18.1"
-=======
-    "@actions/io": "^1.0.1"
->>>>>>> a7d70f4fc3e18369ddd4e955e032ae3637ebc0cd
+    "axios": "^1.20.0"
   }
 }

@@ -36,29 +36,6 @@ export default class AzPSScriptBuilder {
         return script;
     }
 
-<<<<<<< ours
-    static async getAzPSLoginScript(loginConfig: LoginConfig) {
-        let loginMethodName = "";
-        let commands = "";
-
-        if (loginConfig.environment.toLowerCase() == "azurestack") {
-            commands += `Add-AzEnvironment -Name '${q(loginConfig.environment)}' -ARMEndpoint '${q(loginConfig.resourceManagerEndpointUrl)}' | out-null;`;
-||||||| base
-    // Doubles single quotes for safe interpolation into a PowerShell '...' literal.
-    private static escapePSSingleQuoted(value: string): string {
-        if (value === null || value === undefined) {
-            return "";
-        }
-        return String(value).split("'").join("''");
-    }
-
-    static async getAzPSLoginScript(loginConfig: LoginConfig) {
-        let loginMethodName = "";
-        let commands = "";
-
-        if (loginConfig.environment.toLowerCase() == "azurestack") {
-            commands += `Add-AzEnvironment -Name '${loginConfig.environment}' -ARMEndpoint '${AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.resourceManagerEndpointUrl)}' | out-null;`;
-=======
     static async getAzPSLoginInvocation(loginConfig: LoginConfig): Promise<AzPSLoginInvocation> {
         const args: string[] = [
             '-File',        AzPSScriptBuilder.getScriptPath(),
@@ -79,7 +56,6 @@ export default class AzPSScriptBuilder {
         }
         if (loginConfig.maxContextPopulation) {
             args.push('-MaxContextPopulation', loginConfig.maxContextPopulation);
->>>>>>> theirs
         }
 
         if (loginConfig.authType === LoginConfig.AUTH_TYPE_SERVICE_PRINCIPAL) {
@@ -101,134 +77,7 @@ export default class AzPSScriptBuilder {
             }
         }
 
-<<<<<<< ours
-        let script = `try {
-            $ErrorActionPreference = "Stop"
-            $WarningPreference = "SilentlyContinue"
-            $output = @{}
-            ${commands}
-            $output['Success'] = $true
-            $output['Result'] = ""
-        }
-        catch {
-            $output['Success'] = $false
-            $output['Error'] = $_.exception.Message
-        }
-        return ConvertTo-Json $output`;
-
-        return [loginMethodName, script];
-    }
-
-    private static loginWithSecret(loginConfig: LoginConfig): string {
-        let loginCmdlet = `$psLoginSecrets = ConvertTo-SecureString '${q(loginConfig.servicePrincipalSecret)}' -AsPlainText -Force; `;
-        loginCmdlet += `$psLoginCredential = New-Object System.Management.Automation.PSCredential('${q(loginConfig.servicePrincipalId)}', $psLoginSecrets); `;
-
-        let cmdletSuffix = "-Credential $psLoginCredential";
-        loginCmdlet += AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-
-        return loginCmdlet;
-    }
-
-    private static async loginWithOIDC(loginConfig: LoginConfig) {
-        await loginConfig.getFederatedToken();
-        let cmdletSuffix = `-ApplicationId '${q(loginConfig.servicePrincipalId)}' -FederatedToken '${q(loginConfig.federatedToken)}'`;
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    private static loginWithSystemAssignedIdentity(loginConfig: LoginConfig): string {
-        let cmdletSuffix = "";
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    static loginWithUserAssignedIdentity(loginConfig: LoginConfig): string {
-        let cmdletSuffix = `-AccountId '${q(loginConfig.servicePrincipalId)}'`;
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    private static psLoginCmdlet(authType:string, environment:string, tenantId:string, subscriptionId:string, cmdletSuffix:string){
-        let loginCmdlet = `Connect-AzAccount `;
-        if(authType === LoginConfig.AUTH_TYPE_SERVICE_PRINCIPAL){
-            loginCmdlet += "-ServicePrincipal ";
-        }else{
-            loginCmdlet += "-Identity ";
-        }
-        loginCmdlet += `-Environment '${q(environment)}' `;
-        if(tenantId){
-            loginCmdlet += `-Tenant '${q(tenantId)}' `;
-        }
-        if(subscriptionId){
-            loginCmdlet += `-Subscription '${q(subscriptionId)}' `;
-        }
-        loginCmdlet += `${cmdletSuffix} -InformationAction Ignore | out-null;`;
-        return loginCmdlet;
-||||||| base
-        let script = `try {
-            $ErrorActionPreference = "Stop"
-            $WarningPreference = "SilentlyContinue"
-            $output = @{}
-            ${commands}
-            $output['Success'] = $true
-            $output['Result'] = ""
-        }
-        catch {
-            $output['Success'] = $false
-            $output['Error'] = $_.exception.Message
-        }
-        return ConvertTo-Json $output`;
-
-        return [loginMethodName, script];
-    }
-
-    private static loginWithSecret(loginConfig: LoginConfig): string {
-        let servicePrincipalSecret: string = AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.servicePrincipalSecret);
-        let servicePrincipalId: string = AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.servicePrincipalId);
-        let loginCmdlet = `$psLoginSecrets = ConvertTo-SecureString '${servicePrincipalSecret}' -AsPlainText -Force; `;
-        loginCmdlet += `$psLoginCredential = New-Object System.Management.Automation.PSCredential('${servicePrincipalId}', $psLoginSecrets); `;
-
-        let cmdletSuffix = "-Credential $psLoginCredential";
-        loginCmdlet += AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-
-        return loginCmdlet;
-    }
-
-    private static async loginWithOIDC(loginConfig: LoginConfig) {
-        await loginConfig.getFederatedToken();
-        let servicePrincipalId: string = AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.servicePrincipalId);
-        let federatedToken: string = AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.federatedToken);
-        let cmdletSuffix = `-ApplicationId '${servicePrincipalId}' -FederatedToken '${federatedToken}'`;
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    private static loginWithSystemAssignedIdentity(loginConfig: LoginConfig): string {
-        let cmdletSuffix = "";
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    static loginWithUserAssignedIdentity(loginConfig: LoginConfig): string {
-        let servicePrincipalId: string = AzPSScriptBuilder.escapePSSingleQuoted(loginConfig.servicePrincipalId);
-        let cmdletSuffix = `-AccountId '${servicePrincipalId}'`;
-        return AzPSScriptBuilder.psLoginCmdlet(loginConfig.authType, loginConfig.environment, loginConfig.tenantId, loginConfig.subscriptionId, cmdletSuffix);
-    }
-
-    private static psLoginCmdlet(authType:string, environment:string, tenantId:string, subscriptionId:string, cmdletSuffix:string){
-        let loginCmdlet = `Connect-AzAccount `;
-        if(authType === LoginConfig.AUTH_TYPE_SERVICE_PRINCIPAL){
-            loginCmdlet += "-ServicePrincipal ";
-        }else{
-            loginCmdlet += "-Identity ";
-        }
-        loginCmdlet += `-Environment '${environment}' `;
-        if(tenantId){
-            loginCmdlet += `-Tenant '${AzPSScriptBuilder.escapePSSingleQuoted(tenantId)}' `;
-        }
-        if(subscriptionId){
-            loginCmdlet += `-Subscription '${AzPSScriptBuilder.escapePSSingleQuoted(subscriptionId)}' `;
-        }
-        loginCmdlet += `${cmdletSuffix} -InformationAction Ignore | out-null;`;
-        return loginCmdlet;
-=======
         return { methodName, args, env };
->>>>>>> theirs
     }
 }
 
